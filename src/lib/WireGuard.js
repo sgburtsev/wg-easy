@@ -203,7 +203,7 @@ AllowedIPs = ${client.address}/32, ${client.address6}/128`;
     return `
 [Interface]
 PrivateKey = ${client.privateKey}
-Address = ${client.address}/32, ${client.address6}/128
+Address = ${client.address}/24, ${client.address6}/64
 ${WG_DEFAULT_DNS ? `DNS = ${WG_DEFAULT_DNS}` : ''}
 ${WG_MTU ? `MTU = ${WG_MTU}` : ''}
 

@@ -17,6 +17,7 @@ const {
   WG_MTU,
   WG_DEFAULT_DNS,
   WG_DEFAULT_ADDRESS,
+  WG_DEFAULT_ADDRESS6,
   WG_PERSISTENT_KEEPALIVE,
   WG_ALLOWED_IPS,
   WG_PRE_UP,
@@ -45,13 +46,15 @@ module.exports = class WireGuard {
           const publicKey = await Util.exec(`echo ${privateKey} | wg pubkey`, {
             log: 'echo ***hidden*** | wg pubkey',
           });
-          const address = WG_DEFAULT_ADDRESS.replace('x', '1');
+          const address  = WG_DEFAULT_ADDRESS.replace('x', '1');
+          const address6 = WG_DEFAULT_ADDRESS6.replace('x', '1');
 
           config = {
             server: {
               privateKey,
               publicKey,
               address,
+              address6,
             },
             clients: {},
           };
@@ -94,7 +97,7 @@ module.exports = class WireGuard {
 # Server
 [Interface]
 PrivateKey = ${config.server.privateKey}
-Address = ${config.server.address}/24
+Address = ${config.server.address}/24, ${config.server.address6}/64
 ListenPort = ${WG_PORT}
 PreUp = ${WG_PRE_UP}
 PostUp = ${WG_POST_UP}
@@ -111,7 +114,7 @@ PostDown = ${WG_POST_DOWN}
 [Peer]
 PublicKey = ${client.publicKey}
 PresharedKey = ${client.preSharedKey}
-AllowedIPs = ${client.address}/32`;
+AllowedIPs = ${client.address}/32, ${client.address6}/128`;
     }
 
     debug('Config saving...');
@@ -137,6 +140,7 @@ AllowedIPs = ${client.address}/32`;
       name: client.name,
       enabled: client.enabled,
       address: client.address,
+      address6: client.address6,
       publicKey: client.publicKey,
       createdAt: new Date(client.createdAt),
       updatedAt: new Date(client.updatedAt),
@@ -199,7 +203,7 @@ AllowedIPs = ${client.address}/32`;
     return `
 [Interface]
 PrivateKey = ${client.privateKey}
-Address = ${client.address}/24
+Address = ${client.address}/32, ${client.address6}/128
 ${WG_DEFAULT_DNS ? `DNS = ${WG_DEFAULT_DNS}` : ''}
 ${WG_MTU ? `MTU = ${WG_MTU}` : ''}
 
@@ -247,11 +251,29 @@ Endpoint = ${WG_HOST}:${WG_PORT}`;
       throw new Error('Maximum number of clients reached.');
     }
 
+    // Calculate next IPv6
+    let address6;
+    for (let i = 2; i < 255; i++) {
+      const client = Object.values(config.clients).find(client => {
+        return client.address === WG_DEFAULT_ADDRESS6.replace('x', i);
+      });
+
+      if (!client) {
+        address = WG_DEFAULT_ADDRESS6.replace('x', i);
+        break;
+      }
+    }
+
+    if (!address6) {
+      throw new Error('Maximum number of clients reached.');
+    }
+
     // Create Client
     const clientId = uuid.v4();
     const client = {
       name,
       address,
+      address6,
       privateKey,
       publicKey,
       preSharedKey,
@@ -313,6 +335,19 @@ Endpoint = ${WG_HOST}:${WG_PORT}`;
     }
 
     client.address = address;
+    client.updatedAt = new Date();
+
+    await this.saveConfig();
+  }
+
+  async updateClientAddress6({ clientId, address6 }) {
+    const client = await this.getClient({ clientId });
+
+    if (!Util.isValidIPv6(address6)) {
+      throw new ServerError(`Invalid Address: ${address6}`, 400);
+    }
+
+    client.address6 = address6;
     client.updatedAt = new Date();
 
     await this.saveConfig();

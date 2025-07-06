@@ -255,11 +255,11 @@ Endpoint = ${WG_HOST}:${WG_PORT}`;
     let address6;
     for (let i = 2; i < 255; i++) {
       const client = Object.values(config.clients).find(client => {
-        return client.address === WG_DEFAULT_ADDRESS6.replace('x', i);
+        return client.address6 === WG_DEFAULT_ADDRESS6.replace('x', i);
       });
 
       if (!client) {
-        address = WG_DEFAULT_ADDRESS6.replace('x', i);
+        address6 = WG_DEFAULT_ADDRESS6.replace('x', i);
         break;
       }
     }
